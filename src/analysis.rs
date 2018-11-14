@@ -6,10 +6,14 @@ pub struct GraphData {
     pub y: Vec<f64>,
 }
 
+/// Compute the radial density distribution function p(r) for the density map, using
+/// the center point of the droplet as the origin.
+///
+/// The distribution is scaled to have units of mass / nm of the circumference at the radius.
 pub fn get_radial_density_distribution(densmap: &DensMap) -> GraphData {
     let (rmin, dr, radius) = get_radius_values_for_histogram(&densmap);
     let histogram = get_radial_mass_sum_of_densmap(&densmap, rmin, dr, radius.len());
-    let scaled_histogram = scale_histogram_to_per_unit_length(histogram, &radius);
+    let scaled_histogram = scale_histogram_to_per_unit_length(&histogram, &radius);
 
     GraphData {
         x: radius,
@@ -25,12 +29,18 @@ pub fn get_radial_density_distribution(densmap: &DensMap) -> GraphData {
 ///
 /// # Error
 /// If the radial density distribution is empty the percentiles cannot be calculated.
+///
+/// # Notes
+/// Makes the assumption that the array of radius values match the density values
+/// after invalid values (inf and NaN) have been removed from it. These shouldn't be
+/// there in the first place unless something has gone *very* wrong when calculating
+/// the density distribution in the first place.
 pub fn get_radius_from_distribution(radial_density: GraphData) -> Result<f64, String> {
     // Ensure that we only have good numbers, no NaN or infs.
     let density = radial_density.y
         .into_iter()
         .filter(|v| v.is_finite())
-        .collect();
+        .collect::<Vec<_>>();
 
     let density_nonzero = cut_bins_below_percentage_of_max(&density, 1.0);
     let (lower_density, upper_density) = get_percentile_values(&density_nonzero, 10.0, 90.0)?;
@@ -53,25 +63,17 @@ pub fn get_radius_from_distribution(radial_density: GraphData) -> Result<f64, St
 ///
 /// # Notes
 /// Assumes that all values are positive.
-fn cut_bins_below_percentage_of_max(values: &Vec<f64>, perc: f64) -> Vec<f64> {
+fn cut_bins_below_percentage_of_max(values: &[f64], perc: f64) -> Vec<f64> {
     let max = values.iter().fold(0.0, |acc: f64, &v| acc.max(v));
     let cutoff = 0.01 * perc * max;
 
     values.into_iter().cloned().filter(|&v| v >= cutoff).collect()
 }
 
-#[test]
-fn test_cut_bins_below_50_percent_of_max() {
-    assert_eq!(
-        vec![4.1, 5.0, 4.5, 8.0],
-        cut_bins_below_percentage_of_max(&vec![0.0, 4.1, 3.9, 5.0, 4.5, 8.0, 3.5], 50.0)
-    );
-}
-
 /// # Notes
 /// Assumes that all input values are valid for a comparison, eg. that floats are not NaN or inf.
 fn get_percentile_values<T: Copy + PartialOrd>(
-    values: &Vec<T>,
+    values: &[T],
     lower: f64,
     upper: f64,
 ) -> Result<(T, T), String> {
@@ -93,7 +95,7 @@ fn get_percentile_values<T: Copy + PartialOrd>(
         ));
     }
 
-    let mut sorted_values = values.clone();
+    let mut sorted_values = values.to_vec();
     sorted_values.sort_by(|a, b| {
         a.partial_cmp(b)
             .expect("could not compare two values when calculating percentile values")
@@ -103,27 +105,6 @@ fn get_percentile_values<T: Copy + PartialOrd>(
     let iupper = (0.01 * upper * sorted_values.len() as f64).round() as usize;
 
     Ok((sorted_values[ilower], sorted_values[iupper]))
-}
-
-#[test]
-fn test_get_20th_and_80th_percentile_values_of_reversed_array() {
-    // In this array, 20% of the values lie below (or at) 1.0 and 80% below (or at) 2.0.
-    let values = vec![3.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 0.0];
-    assert_eq!(Ok((1.0, 2.0)), get_percentile_values(&values, 20.0, 80.0));
-}
-
-#[test]
-fn test_getting_percentiles_from_empty_array_returns_error() {
-    assert!(get_percentile_values(&Vec::<f64>::new(), 0.0, 0.0).is_err());
-}
-
-#[test]
-fn test_getting_invalid_percentiles_returns_error() {
-    let values = vec![3.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 0.0];
-    assert!(get_percentile_values(&values, -1.0, 0.0).is_err());
-    assert!(get_percentile_values(&values, 0.0, -1.0).is_err());
-    assert!(get_percentile_values(&values, 101.0, 0.0).is_err());
-    assert!(get_percentile_values(&values, 0.0, 101.0).is_err());
 }
 
 fn get_radius_values_for_histogram(densmap: &DensMap) -> (f64, f64, Vec<f64>) {
@@ -176,7 +157,7 @@ fn get_radial_mass_sum_of_densmap(
     histogram
 }
 
-fn scale_histogram_to_per_unit_length(histogram: Vec<f64>, radius: &Vec<f64>) -> Vec<f64> {
+fn scale_histogram_to_per_unit_length(histogram: &[f64], radius: &[f64]) -> Vec<f64> {
     use std::f64::consts::PI;
     histogram
         .iter()
@@ -202,4 +183,33 @@ fn calc_maximum_radius(densmap: &DensMap) -> f64 {
     rmax2 = rmax2.max((x0 - xmax).powi(2) + (y0 - ymax).powi(2));
 
     rmax2.sqrt()
+}
+
+#[test]
+fn test_cut_bins_below_50_percent_of_max() {
+    assert_eq!(
+        vec![4.1, 5.0, 4.5, 8.0],
+        cut_bins_below_percentage_of_max(&vec![0.0, 4.1, 3.9, 5.0, 4.5, 8.0, 3.5], 50.0)
+    );
+}
+
+#[test]
+fn test_get_20th_and_80th_percentile_values_of_reversed_array() {
+    // In this array, 20% of the values lie below (or at) 1.0 and 80% below (or at) 2.0.
+    let values = vec![3.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 0.0];
+    assert_eq!(Ok((1.0, 2.0)), get_percentile_values(&values, 20.0, 80.0));
+}
+
+#[test]
+fn test_getting_percentiles_from_empty_array_returns_error() {
+    assert!(get_percentile_values(&Vec::<f64>::new(), 0.0, 0.0).is_err());
+}
+
+#[test]
+fn test_getting_invalid_percentiles_returns_error() {
+    let values = vec![3.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 1.0, 1.0, 0.0];
+    assert!(get_percentile_values(&values, -1.0, 0.0).is_err());
+    assert!(get_percentile_values(&values, 0.0, -1.0).is_err());
+    assert!(get_percentile_values(&values, 101.0, 0.0).is_err());
+    assert!(get_percentile_values(&values, 0.0, 101.0).is_err());
 }
