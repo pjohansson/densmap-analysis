@@ -37,7 +37,8 @@ pub fn get_radial_density_distribution(densmap: &DensMap) -> GraphData {
 /// the density distribution in the first place.
 pub fn get_radius_from_distribution(radial_density: GraphData) -> Result<f64, String> {
     // Ensure that we only have good numbers, no NaN or infs.
-    let density = radial_density.y
+    let density = radial_density
+        .y
         .into_iter()
         .filter(|v| v.is_finite())
         .collect::<Vec<_>>();
@@ -67,7 +68,11 @@ fn cut_bins_below_percentage_of_max(values: &[f64], perc: f64) -> Vec<f64> {
     let max = values.iter().fold(0.0, |acc: f64, &v| acc.max(v));
     let cutoff = 0.01 * perc * max;
 
-    values.into_iter().cloned().filter(|&v| v >= cutoff).collect()
+    values
+        .into_iter()
+        .cloned()
+        .filter(|&v| v >= cutoff)
+        .collect()
 }
 
 /// # Notes
