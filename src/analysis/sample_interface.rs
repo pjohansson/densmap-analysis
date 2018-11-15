@@ -3,7 +3,8 @@ use crate::{
     graphdata::Graph,
 };
 
-/// Sample the contact line interface per angle from the droplet center point.
+/// Sample the contact line interface per angle from the droplet center point. The returned
+/// values are relative to the base radius of the droplet.
 pub fn sample_interface(densmap: &DensMap, base_radius: f64) -> Graph {
     // For now, use an angular precision that gives a 0.1nm resolution at the droplet radius.
     let num_values = (2.0 * std::f64::consts::PI * base_radius / 0.1).ceil() as usize;
@@ -17,6 +18,7 @@ pub fn sample_interface(densmap: &DensMap, base_radius: f64) -> Graph {
     let radius = angles
         .iter()
         .map(|&a| sample_interface_at_angle(&densmap, a, base_radius, cutoff))
+        .map(|r| r)
         .collect();
 
     Graph::Polar { angles, radius }
