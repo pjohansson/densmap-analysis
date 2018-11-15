@@ -1,8 +1,10 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use std::fs::File;
-use std::io::{self, BufReader, BufWriter};
-use std::path::Path;
+use std::{
+    fs::File,
+    io::{self, BufReader, BufWriter},
+    path::Path,
+};
 
 pub type Vec2 = [f64; 2];
 pub type Vec3 = [f64; 3];
@@ -95,6 +97,9 @@ pub fn write_densmap(path: &Path, densmap: &DensMap, time: f64) -> Result<(), io
     Ok(())
 }
 
+/// Get the 2D grid position from a 1D index in the array.
+///
+/// Return `None` if the input index lies outside of the system.
 pub fn index2tuple(i: usize, [nx, ny]: Shape) -> Option<(usize, usize)> {
     if i < (nx * ny) as usize {
         Some((i % nx as usize, i / nx as usize))
@@ -103,12 +108,41 @@ pub fn index2tuple(i: usize, [nx, ny]: Shape) -> Option<(usize, usize)> {
     }
 }
 
+/// Get the 1D array index from a 2D grid position.
+///
+/// Return `None` if the 2D position lies outside of the system.
 pub fn tuple2index(ix: isize, iy: isize, [nx, ny]: Shape) -> Option<usize> {
     if ix >= 0 && ix < nx as isize && iy >= 0 && iy < ny as isize {
         Some((iy * nx as isize + ix) as usize)
     } else {
         None
     }
+}
+
+/// Get the 1D array index from a 2D system coordinate.
+///
+/// Return `None` if the 2D coordinate lies outside of the system.
+pub fn coord2index(x: f64, y: f64, [dx, dy, _]: Vec3, shape: Shape) -> Option<usize> {
+    let ix = (x / dx).floor() as isize;
+    let iy = (y / dy).floor() as isize;
+    tuple2index(ix, iy, shape)
+}
+
+#[test]
+fn test_correct_index_from_coordinate_in_uniform_bin_sized_system() {
+    let shape = [6, 9];
+    let bin_size = [0.5, 0.5, 0.0];
+
+    assert_eq!(Some(0), coord2index(0.0, 0.0, bin_size, shape));
+    assert_eq!(Some(1), coord2index(0.5, 0.0, bin_size, shape));
+    assert_eq!(Some(5), coord2index(2.5, 0.0, bin_size, shape));
+    assert_eq!(Some(6), coord2index(0.0, 0.5, bin_size, shape));
+    assert_eq!(Some(7), coord2index(0.5, 0.5, bin_size, shape));
+    assert_eq!(Some(53), coord2index(2.9, 4.4, bin_size, shape));
+    assert_eq!(None, coord2index(-0.1, 0.0, bin_size, shape));
+    assert_eq!(None, coord2index(0.0, -0.1, bin_size, shape));
+    assert_eq!(None, coord2index(3.0, 0.0, bin_size, shape));
+    assert_eq!(None, coord2index(0.0, 4.5, bin_size, shape));
 }
 
 #[test]

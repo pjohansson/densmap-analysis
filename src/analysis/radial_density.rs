@@ -1,21 +1,18 @@
-use crate::densmap::{index2tuple, DensMap};
-
-#[derive(Debug)]
-pub struct GraphData {
-    pub x: Vec<f64>,
-    pub y: Vec<f64>,
-}
+use crate::{
+    densmap::{index2tuple, DensMap},
+    graphdata::Histogram,
+};
 
 /// Compute the radial density distribution function p(r) for the density map, using
 /// the center point of the droplet as the origin.
 ///
 /// The distribution is scaled to have units of mass / nm of the circumference at the radius.
-pub fn get_radial_density_distribution(densmap: &DensMap) -> GraphData {
+pub fn get_radial_density_distribution(densmap: &DensMap) -> Histogram {
     let (rmin, dr, radius) = get_radius_values_for_histogram(&densmap);
     let histogram = get_radial_mass_sum_of_densmap(&densmap, rmin, dr, radius.len());
     let scaled_histogram = scale_histogram_to_per_unit_length(&histogram, &radius);
 
-    GraphData {
+    Histogram {
         x: radius,
         y: scaled_histogram,
     }
@@ -35,7 +32,7 @@ pub fn get_radial_density_distribution(densmap: &DensMap) -> GraphData {
 /// after invalid values (inf and NaN) have been removed from it. These shouldn't be
 /// there in the first place unless something has gone *very* wrong when calculating
 /// the density distribution in the first place.
-pub fn get_radius_from_distribution(radial_density: GraphData) -> Result<f64, String> {
+pub fn get_radius_from_distribution(radial_density: Histogram) -> Result<f64, String> {
     // Ensure that we only have good numbers, no NaN or infs.
     let density = radial_density
         .y
@@ -163,11 +160,10 @@ fn get_radial_mass_sum_of_densmap(
 }
 
 fn scale_histogram_to_per_unit_length(histogram: &[f64], radius: &[f64]) -> Vec<f64> {
-    use std::f64::consts::PI;
     histogram
         .iter()
         .zip(radius.iter())
-        .map(|(v, r)| v / (2.0 * PI * r))
+        .map(|(v, r)| v / (2.0 * std::f64::consts::PI * r))
         .collect()
 }
 
