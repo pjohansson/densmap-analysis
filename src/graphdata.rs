@@ -134,25 +134,23 @@ fn interpolate_data(from_xs: &[f64], ys: &[f64], onto_xs: &[f64]) -> Vec<f64> {
     onto_xs
         .iter()
         .map(|x| (x, from_xs.binary_search_by(|x1| x1.partial_cmp(x).unwrap())))
-        .map(|(x, r)| {
-            match r {
-                Ok(i) => ys[i],
-                Err(i) => {
-                    let (i0, i1) = if i == 0 {
-                        (0, 1)
-                    } else if i == from_xs.len() {
-                        (i - 2, i - 1)
-                    } else {
-                        (i - 1, i)
-                    };
+        .map(|(x, r)| match r {
+            Ok(i) => ys[i],
+            Err(i) => {
+                let (i0, i1) = if i == 0 {
+                    (0, 1)
+                } else if i == from_xs.len() {
+                    (i - 2, i - 1)
+                } else {
+                    (i - 1, i)
+                };
 
-                    let x0 = from_xs[i0];
-                    let x1 = from_xs[i1];
-                    let y0 = ys[i0];
-                    let y1 = ys[i1];
+                let x0 = from_xs[i0];
+                let x1 = from_xs[i1];
+                let y0 = ys[i0];
+                let y1 = ys[i1];
 
-                    (y0 * (x1 - x) + y1 * (x - x0)) / (x1 - x0)
-                },
+                (y0 * (x1 - x) + y1 * (x - x0)) / (x1 - x0)
             }
         })
         .collect()
@@ -161,7 +159,7 @@ fn interpolate_data(from_xs: &[f64], ys: &[f64], onto_xs: &[f64]) -> Vec<f64> {
 #[test]
 fn test_interpolate_onto_midpoint_values() {
     let from_xs = vec![0.0, 1.0, 2.0, 3.0];
-    let ys =      vec![5.0, 1.0, 3.0, 0.0];
+    let ys = vec![5.0, 1.0, 3.0, 0.0];
 
     let onto_xs = vec![0.5, 1.5, 2.5];
 
@@ -174,12 +172,9 @@ fn test_interpolate_onto_midpoint_values() {
 #[test]
 fn test_interpolating_values_outside_of_initial_range_is_linear() {
     let from_xs = vec![0.0, 1.0, 2.0, 3.0];
-    let ys =      vec![5.0, 1.0, 3.0, 0.0];
+    let ys = vec![5.0, 1.0, 3.0, 0.0];
 
     let onto_xs = vec![-0.5, 4.0];
 
-    assert_eq!(
-        vec![7.0, -3.0],
-        interpolate_data(&from_xs, &ys, &onto_xs)
-    );
+    assert_eq!(vec![7.0, -3.0], interpolate_data(&from_xs, &ys, &onto_xs));
 }
