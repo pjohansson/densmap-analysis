@@ -1,5 +1,3 @@
-// #![feature(impl_trait_in_bindings)]
-
 mod analysis;
 mod average;
 mod densmap;
@@ -26,31 +24,87 @@ use self::{
 };
 
 #[derive(Debug, StructOpt)]
-#[structopt(raw(setting = "structopt::clap::AppSettings::DeriveDisplayOrder"))]
+#[structopt(raw(
+    setting = "structopt::clap::AppSettings::ColoredHelp",
+    setting = "structopt::clap::AppSettings::DeriveDisplayOrder"
+))]
 struct Args {
     #[structopt(parse(from_os_str), conflicts_with = "base", required_unless = "base")]
     /// List of density map files to analyze
     filenames: Vec<PathBuf>,
-    #[structopt(long = "base", parse(from_os_str))]
+
+    #[structopt(long = "base", value_name = "path", parse(from_os_str))]
     /// Base file name for density maps
     base: Option<PathBuf>,
+
+    #[structopt(short = "d", long = "densmap", value_name = "path", parse(from_os_str))]
+    /// Base output file name for smoothed density maps
+    smooth: Option<PathBuf>,
+    /// Base output file name for contact line angular distributions
+    #[structopt(
+        long = "contact_line",
+        value_name = "path",
+        hidden_short_help = true,
+        parse(from_os_str)
+    )]
+    contact_line: Option<PathBuf>,
+
+    #[structopt(
+        long = "interface",
+        value_name = "path",
+        hidden_short_help = true,
+        parse(from_os_str)
+    )]
+    /// Base output file name for interface graphs
+    interface: Option<PathBuf>,
+
+    #[structopt(
+        short = "r",
+        long = "radius",
+        default_value = "radius.xvg",
+        value_name = "path",
+        parse(from_os_str)
+    )]
+    /// Output file name for droplet radius time series
+    radius: PathBuf,
+
+    #[structopt(
+        long = "rdd",
+        value_name = "path",
+        hidden_short_help = true,
+        parse(from_os_str)
+    )]
+    /// Base output file name for radial density distributions
+    radial_density: Option<PathBuf>,
+
+    #[structopt(
+        long = "ac",
+        value_name = "path",
+        hidden_short_help = true,
+        parse(from_os_str)
+    )]
+    /// Output file name for contact line autocorrelation
+    autocorrelation: Option<PathBuf>,
+
     #[structopt(long = "ext", default_value = "dat", parse(from_os_str))]
-    /// Extension for file names
+    /// Extension for density map file names
     ext: OsString,
     #[structopt(
         long = "time_sig",
+        long_help = "Regular expression for time signature in file names. The expression must include a capture group around the time value.",
         default_value = r"([0-9]{5}\.[0-9]{3})ps",
         value_name = "regex"
     )]
     /// Regular expression for time signature in file names
     time_regex: String,
+
     #[structopt(short = "b", long = "begin", requires = "base", value_name = "t0")]
     /// Only include times for which t >= t0
     begin: Option<f64>,
     #[structopt(short = "e", long = "end", requires = "base", value_name = "t1")]
     /// Only include times for which t <= t1
     end: Option<f64>,
-    #[structopt(short = "d", long = "dt", requires = "base", value_name = "dt")]
+    #[structopt(long = "dt", requires = "base", value_name = "dt")]
     /// Only include times for which t % dt = 0
     dt: Option<f64>,
 }
@@ -78,14 +132,15 @@ fn main() -> Result<(), io::Error> {
 
     if let Ok(radius) = get_radius_from_distribution(radial_density) {
         let contact_line = sample_interface(&smoothed_densmap, radius);
-        let new_angles = (0..2160).map(|n| n as f64 * 360.0 / 2160.0).collect::<Vec<_>>();
+        let new_angles = (0..2160)
+            .map(|n| n as f64 * 360.0 / 2160.0)
+            .collect::<Vec<_>>();
         let resampled = contact_line.resample(&new_angles);
         write_xvg(&resampled);
     }
 
     let out = Path::new("smooth.dat");
     write_densmap(&out, &smoothed_densmap, time)?;
-
 
     Ok(())
 }
@@ -123,6 +178,7 @@ fn construct_file_list(
             match re.captures(&file_name) {
                 Some(captures) => {
                     let time = captures.get(1).unwrap().as_str().parse::<f64>().unwrap();
+
                     begin.map(|b| time >= b).unwrap_or(true)
                         && end.map(|e| time <= e).unwrap_or(true)
                         && dt.map(|d| time % d == 0.0).unwrap_or(true)
