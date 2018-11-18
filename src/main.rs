@@ -3,9 +3,10 @@ mod average;
 mod densmap;
 mod graphdata;
 
+use pbr::ProgressBar;
 use regex::Regex;
 use structopt::StructOpt;
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 use std::{
     ffi::{OsStr, OsString},
@@ -15,12 +16,13 @@ use std::{
 
 use self::{
     analysis::{
+        autocorrelation::calc_autocorrelation,
         radial_density::{get_radial_density_distribution, get_radius_from_distribution},
         sample_interface::sample_interface,
     },
     average::smoothen_data_of_bins_within_radius,
     densmap::{read_densmap, write_densmap},
-    graphdata::{write_xvg, XYData},
+    graphdata::{write_xvg, Graph, Histogram, XYData},
 };
 
 #[derive(Debug, StructOpt)]
@@ -124,25 +126,114 @@ fn main() -> Result<(), io::Error> {
         None => args.filenames,
     };
 
-    eprintln!("{:?}", filenames);
+    let mut radius_time_series = Vec::with_capacity(filenames.len());
+    let mut times = Vec::with_capacity(filenames.len());
 
-    let (densmap, time) = read_densmap(&filenames[0])?;
-    let smoothed_densmap = smoothen_data_of_bins_within_radius(densmap, 0.5);
-    let radial_density = get_radial_density_distribution(&smoothed_densmap);
+    // To calculate the autocorrelation of contact line fluctuations we need to save
+    // the contact line for every time step.
+    let mut contact_line_per_time = Vec::with_capacity(filenames.len());
 
-    if let Ok(radius) = get_radius_from_distribution(radial_density) {
-        let contact_line = sample_interface(&smoothed_densmap, radius);
-        let new_angles = (0..2160)
-            .map(|n| n as f64 * 360.0 / 2160.0)
-            .collect::<Vec<_>>();
-        let resampled = contact_line.resample(&new_angles);
-        write_xvg(&resampled);
+    let mut pb = ProgressBar::new(filenames.len() as u64);
+    pb.format("[=> ]");
+
+    for (i, filename) in filenames.into_iter().enumerate() {
+        pb.message(&format!("Processing '{}' ", &filename.to_str().unwrap()));
+        pb.inc();
+
+        let (densmap, time) = read_densmap(&filename)?;
+
+        let dir = filename.parent().unwrap();
+        let time_signature = read_time_signature_or_default(&filename, &args.time_regex, i);
+
+        let smoothed_densmap = smoothen_data_of_bins_within_radius(densmap, 0.5);
+        if let Some(base) = &args.smooth {
+            let path = construct_file_name(&base, &time_signature, &args.ext, &dir);
+            write_densmap(&path, &smoothed_densmap, time)?;
+        }
+
+        let radial_density = get_radial_density_distribution(&smoothed_densmap);
+        if let Some(base) = &args.radial_density {
+            let path = construct_file_name(&base, &time_signature, &args.ext, &dir);
+            write_xvg(&path, &radial_density)?;
+        }
+
+        if let Ok(radius) = get_radius_from_distribution(radial_density) {
+            radius_time_series.push(radius);
+            times.push(time);
+
+            let contact_line = sample_interface(&smoothed_densmap, radius);
+            let interface = contact_line.to_carthesian();
+            if let Some(base) = &args.interface {
+                let path = construct_file_name(&base, &time_signature, &args.ext, &dir);
+                write_xvg(&path, &interface)?;
+            }
+
+            let relative_contact_line = Graph::Polar {
+                angles: contact_line.x().to_vec(),
+                radius: contact_line.y().iter().map(|r| r - radius).collect()
+            };
+
+            if let Some(base) = &args.contact_line {
+                let path = construct_file_name(&base, &time_signature, &args.ext, &dir);
+                write_xvg(&path, &relative_contact_line)?;
+            }
+
+            contact_line_per_time.push(relative_contact_line);
+        }
     }
 
-    let out = Path::new("smooth.dat");
-    write_densmap(&out, &smoothed_densmap, time)?;
+    pb.finish_print("Processed all density maps.");
+    eprintln!("");
+
+    if let Some(filename) = args.autocorrelation {
+        let mut pb = ProgressBar::new(contact_line_per_time.len() as u64);
+        pb.message("Calculating autocorrelation of contact line ");
+
+
+        // To calculate the autocorrelation for the contact line we resample the data onto
+        // a common set of angles. We use the largest number of sample points as the base.
+        let resample_xvals = contact_line_per_time
+            .iter()
+            .max_by(|&a, &b| a.x().len().cmp(&b.x().len()))
+            .unwrap()
+            .x();
+        let resampled_contact_lines = contact_line_per_time
+            .iter()
+            .map(|contact_line| contact_line.resample(&resample_xvals))
+            .collect::<Vec<_>>();
+
+        let autocorrelation_yvals = calc_autocorrelation(&resampled_contact_lines);
+        let autocorrelation = Histogram { x: times.clone(), y: autocorrelation_yvals };
+
+        write_xvg(&filename, &autocorrelation)?;
+        pb.finish_print("Finished autocorrelation calculation.");
+    }
+
+    let radius_per_time = Graph::Carthesian {
+        x: times,
+        y: radius_time_series,
+    };
+    write_xvg(&args.radius, &radius_per_time)?;
 
     Ok(())
+}
+
+fn construct_file_name(base: &Path, time_sig: &str, ext: &OsStr, dir: &Path) -> PathBuf {
+    let file_name =
+        PathBuf::from(base.to_str().unwrap().to_string() + time_sig + "." + ext.to_str().unwrap());
+    dir.join(&file_name)
+}
+
+fn read_time_signature_or_default(path: &Path, time_regex: &str, index: usize) -> String {
+    // For now we can recompile the regular expression for every time step, even though
+    // it does not change. The compilation time is marginal at best compared to all the analysis.
+    // It may be poor practice, but eh.
+    let re = Regex::new(&time_regex).unwrap();
+
+    match re.captures(&path.to_str().unwrap()) {
+        Some(capture) => String::from(capture.get(0).unwrap().as_str()),
+        None => format!("{:05}", index + 1),
+    }
 }
 
 /// Use the given base filename path along with the regular expression for time signatures

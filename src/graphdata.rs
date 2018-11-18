@@ -1,9 +1,19 @@
+use std::{
+    fs::File,
+    io::{self, BufWriter, Write},
+    path::Path,
+};
+
 /// Write input data as an .xvg formatted file.
-pub fn write_xvg<T: XYData>(data: &T) {
-    data.x()
-        .iter()
-        .zip(data.y().iter())
-        .for_each(|(x, y)| println!("{:12.5} {:12.5}", x, y));
+pub fn write_xvg<T: XYData>(path: &Path, data: &T) -> Result<(), io::Error> {
+    let fp = File::create(&path)?;
+    let mut writer = BufWriter::new(fp);
+
+    for (x, y) in data.x().iter().zip(data.y().iter()) {
+        write!(writer, "{:12.5} {:12.5}\n", x, y)?;
+    }
+
+    Ok(())
 }
 
 /// Trait for data that has values corresponding to x and y axes.
