@@ -7,16 +7,22 @@ pub fn calc_autocorrelation<T: XYData>(data: &[T]) -> Vec<f64> {
         for j in i..data.len() {
             let n = j - i;
 
-            let a = data[i].y();
-            let b = data[j].y();
+            let y0 = data[i].y();
+            let y1 = data[j].y();
 
-            for (val0, val1) in a.iter().zip(b.iter()) {
-                values[n] += val0 * val1;
+            for (a, b) in y0.iter().zip(y1.iter()) {
+                values[n] += a * b;
             }
         }
     }
 
-    // let max = values[0];
-    // values.into_iter().map(|v| v / max).collect()
-    values
+    // Rescale the values by dividing with the number of measurement points for the time lag.
+    let rescaled_values = values
+        .into_iter()
+        .enumerate()
+        .map(|(i, v)| v / (data.len() - i) as f64)
+        .collect::<Vec<_>>();
+
+    let max = rescaled_values[0];
+    rescaled_values.into_iter().map(|v| v / max).collect()
 }

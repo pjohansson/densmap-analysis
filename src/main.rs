@@ -170,7 +170,7 @@ fn main() -> Result<(), io::Error> {
 
             let relative_contact_line = Graph::Polar {
                 angles: contact_line.x().to_vec(),
-                radius: contact_line.y().iter().map(|r| r - radius).collect()
+                radius: contact_line.y().iter().map(|r| r - radius).collect(),
             };
 
             if let Some(base) = &args.contact_line {
@@ -189,7 +189,6 @@ fn main() -> Result<(), io::Error> {
         let mut pb = ProgressBar::new(contact_line_per_time.len() as u64);
         pb.message("Calculating autocorrelation of contact line ");
 
-
         // To calculate the autocorrelation for the contact line we resample the data onto
         // a common set of angles. We use the largest number of sample points as the base.
         let resample_xvals = contact_line_per_time
@@ -203,7 +202,10 @@ fn main() -> Result<(), io::Error> {
             .collect::<Vec<_>>();
 
         let autocorrelation_yvals = calc_autocorrelation(&resampled_contact_lines);
-        let autocorrelation = Histogram { x: times.clone(), y: autocorrelation_yvals };
+        let autocorrelation = Histogram {
+            x: times.clone(),
+            y: autocorrelation_yvals,
+        };
 
         write_xvg(&filename, &autocorrelation)?;
         pb.finish_print("Finished autocorrelation calculation.");
