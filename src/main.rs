@@ -9,9 +9,11 @@ use structopt::StructOpt;
 use walkdir::WalkDir;
 
 use std::{
+    env::current_dir,
     ffi::{OsStr, OsString},
     io,
     path::{Path, PathBuf},
+    process::exit,
 };
 
 use self::{
@@ -126,6 +128,11 @@ fn main() -> Result<(), io::Error> {
         None => args.filenames,
     };
 
+    if filenames.is_empty() {
+        eprintln!("No input files could be detected.");
+        exit(1);
+    }
+
     let mut radius_time_series = Vec::with_capacity(filenames.len());
     let mut times = Vec::with_capacity(filenames.len());
 
@@ -137,7 +144,7 @@ fn main() -> Result<(), io::Error> {
     pb.format("[=> ]");
 
     for (i, filename) in filenames.into_iter().enumerate() {
-        pb.message(&format!("Processing '{}' ", &filename.to_str().unwrap()));
+        pb.message(&format!("Processing '{}' ", &filename.file_name().unwrap().to_str().unwrap()));
         pb.inc();
 
         let (densmap, time) = read_densmap(&filename)?;
@@ -250,17 +257,23 @@ fn construct_file_list(
     end: Option<f64>,
     dt: Option<f64>,
 ) -> Vec<PathBuf> {
-    let dir = base_path.parent().unwrap_or(&Path::new("."));
+    let dir = base_path.parent().unwrap_or(&Path::new("./"));
+    let abs_dir = if dir.is_absolute() {
+        dir.to_path_buf()
+    } else {
+        current_dir().unwrap().join(dir)
+    };
+
     let base = base_path
         .file_name()
         .unwrap_or(&OsStr::new(""))
         .to_str()
         .unwrap();
 
-    let regex_string = format!(r"{}{}\.{}", base, time_regex, ext.to_str().unwrap());
+    let regex_string = format!(r"^{}{}\.{}$", base, time_regex, ext.to_str().unwrap());
     let re = Regex::new(&regex_string).unwrap();
 
-    WalkDir::new(dir)
+    WalkDir::new(abs_dir)
         .min_depth(1)
         .max_depth(1)
         .sort_by(|a, b| a.file_name().cmp(b.file_name()))
