@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 byteorder = "1"
+flate2 = "1"
 pbr = "1"
 regex = "1"
 structopt = "0.2"

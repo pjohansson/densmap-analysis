@@ -1,8 +1,9 @@
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use flate2::{bufread::GzDecoder, write::GzEncoder, Compression};
 
 use std::{
     fs::File,
-    io::{self, BufReader, BufWriter},
+    io::{self, BufReader, BufWriter, Read, Write},
     path::Path,
 };
 
@@ -23,10 +24,21 @@ pub struct DensMap {
     pub data: Vec<f64>,
 }
 
+/// Read a density map from the input path.
+///
+/// If the path extension ends with '.gz' the file is assumed to be compressed with gzip
+/// and is decompressed during reading.
 pub fn read_densmap(path: &Path) -> Result<(DensMap, f64), io::Error> {
     let fp = File::open(&path)?;
     let mut reader = BufReader::new(fp);
 
+    match path.extension().map(|p| p.to_str().unwrap()) {
+        Some("gz") => read_densmap_from_reader(&mut GzDecoder::new(reader)),
+        _ => read_densmap_from_reader(&mut reader),
+    }
+}
+
+fn read_densmap_from_reader<R: Read>(reader: &mut R) -> Result<(DensMap, f64), io::Error> {
     let bin_size = [
         reader.read_f64::<LittleEndian>()?,
         reader.read_f64::<LittleEndian>()?,
@@ -71,10 +83,28 @@ pub fn read_densmap(path: &Path) -> Result<(DensMap, f64), io::Error> {
     ))
 }
 
+/// Write a density map to the input path.
+///
+/// If the extension ends with '.gz' the file will be encoded as a gzipped file.
 pub fn write_densmap(path: &Path, densmap: &DensMap, time: f64) -> Result<(), io::Error> {
     let fp = File::create(&path)?;
     let mut writer = BufWriter::new(fp);
 
+    match path.extension().map(|p| p.to_str().unwrap()) {
+        Some("gz") => write_densmap_to_writer(
+            &mut GzEncoder::new(writer, Compression::fast()),
+            &densmap,
+            time,
+        ),
+        _ => write_densmap_to_writer(&mut writer, &densmap, time),
+    }
+}
+
+fn write_densmap_to_writer<W: Write>(
+    writer: &mut W,
+    densmap: &DensMap,
+    time: f64,
+) -> Result<(), io::Error> {
     writer.write_f64::<LittleEndian>(densmap.bin_size[0])?;
     writer.write_f64::<LittleEndian>(densmap.bin_size[1])?;
     writer.write_f64::<LittleEndian>(densmap.bin_size[2])?;

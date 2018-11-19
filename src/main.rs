@@ -1,3 +1,5 @@
+#![feature(impl_trait_in_bindings)]
+
 mod analysis;
 mod average;
 mod densmap;
@@ -144,7 +146,10 @@ fn main() -> Result<(), io::Error> {
     pb.format("[=> ]");
 
     for (i, filename) in filenames.into_iter().enumerate() {
-        pb.message(&format!("Processing '{}' ", &filename.file_name().unwrap().to_str().unwrap()));
+        pb.message(&format!(
+            "Processing '{}' ",
+            &filename.file_name().unwrap().to_str().unwrap()
+        ));
         pb.inc();
 
         let (densmap, time) = read_densmap(&filename)?;
@@ -160,7 +165,7 @@ fn main() -> Result<(), io::Error> {
 
         let radial_density = get_radial_density_distribution(&smoothed_densmap);
         if let Some(base) = &args.radial_density {
-            let path = construct_file_name(&base, &time_signature, &args.ext, &dir);
+            let path = construct_file_name(&base, &time_signature, OsStr::new("xvg"), &dir);
             write_xvg(&path, &radial_density)?;
         }
 
@@ -171,7 +176,7 @@ fn main() -> Result<(), io::Error> {
             let contact_line = sample_interface(&smoothed_densmap, radius);
             let interface = contact_line.to_carthesian();
             if let Some(base) = &args.interface {
-                let path = construct_file_name(&base, &time_signature, &args.ext, &dir);
+                let path = construct_file_name(&base, &time_signature, OsStr::new("xvg"), &dir);
                 write_xvg(&path, &interface)?;
             }
 
@@ -181,7 +186,7 @@ fn main() -> Result<(), io::Error> {
             };
 
             if let Some(base) = &args.contact_line {
-                let path = construct_file_name(&base, &time_signature, &args.ext, &dir);
+                let path = construct_file_name(&base, &time_signature, OsStr::new("xvg"), &dir);
                 write_xvg(&path, &relative_contact_line)?;
             }
 
