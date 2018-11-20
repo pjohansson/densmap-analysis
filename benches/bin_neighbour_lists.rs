@@ -1,5 +1,8 @@
 use criterion::*;
-use densmap::{average::get_system_bin_neighbours, densmap::{Shape, Vec3}};
+use densmap::{
+    average::get_system_bin_neighbours,
+    densmap::{Shape, Vec3},
+};
 
 fn bin_neighbour_lists(c: &mut Criterion) {
     c.bench_function("bin_neighbours 100 200", |b| {

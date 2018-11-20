@@ -41,7 +41,7 @@ pub fn get_radius_from_distribution(radial_density: Histogram) -> Result<f64, St
         .collect::<Vec<_>>();
 
     let density_nonzero = cut_bins_below_percentage_of_max(&density, 1.0);
-    let (lower_density, upper_density) = get_percentile_values(&density_nonzero, 10.0, 90.0)?;
+    let (lower_density, upper_density) = get_percentile_values(&density_nonzero, 5.0, 95.0)?;
     let mid_density = 0.5 * (lower_density + upper_density);
 
     // Find the vector index where the density value is reached by sweeping the histogram

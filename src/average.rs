@@ -1,5 +1,5 @@
-use rayon::prelude::*;
 use crate::densmap::{index2tuple, tuple2index, DensMap, Shape, Vec3};
+use rayon::prelude::*;
 
 pub fn smoothen_data_of_bins_within_radius(densmap: DensMap, radius: f64) -> DensMap {
     let neighbours = get_system_bin_neighbours(radius, densmap.bin_size, densmap.shape);
@@ -88,6 +88,7 @@ fn get_averaging_bin_sieve(radius: f64, [dx, dy, _]: Vec3) -> Vec<(isize, isize)
     bins
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 
