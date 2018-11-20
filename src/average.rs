@@ -1,3 +1,4 @@
+use rayon::prelude::*;
 use crate::densmap::{index2tuple, tuple2index, DensMap, Shape, Vec3};
 
 pub fn smoothen_data_of_bins_within_radius(densmap: DensMap, radius: f64) -> DensMap {
@@ -10,10 +11,11 @@ pub fn smoothen_data_of_bins_within_radius(densmap: DensMap, radius: f64) -> Den
 }
 
 /// In order and for all bins in the system, get a list of its neighbours and return them all.
-fn get_system_bin_neighbours(radius: f64, bin_size: Vec3, shape: Shape) -> Vec<Vec<usize>> {
+pub fn get_system_bin_neighbours(radius: f64, bin_size: Vec3, shape: Shape) -> Vec<Vec<usize>> {
     let sieve = get_averaging_bin_sieve(radius, bin_size);
     let [nx, ny] = shape;
     (0..(nx * ny) as usize)
+        .into_par_iter()
         .map(|i| get_bin_neighbours(i, shape, &sieve))
         .collect()
 }
@@ -25,7 +27,7 @@ fn get_system_bin_neighbours(radius: f64, bin_size: Vec3, shape: Shape) -> Vec<V
 /// the vectors are of equal size.
 fn get_averaged_system(data: Vec<f64>, neighbours: Vec<Vec<usize>>) -> Vec<f64> {
     neighbours
-        .iter()
+        .into_par_iter()
         .map(|bins| average_value_of_bins(&data, &bins))
         .collect()
 }
@@ -86,53 +88,57 @@ fn get_averaging_bin_sieve(radius: f64, [dx, dy, _]: Vec3) -> Vec<(isize, isize)
     bins
 }
 
-#[test]
-fn test_average_is_calculated_from_correct_bin_indices() {
-    let data = vec![10.0, 20.0, 30.0];
+mod tests {
+    use super::*;
 
-    assert_eq!(0.0, average_value_of_bins(&data, &vec![]));
-    assert_eq!(10.0, average_value_of_bins(&data, &vec![0]));
-    assert_eq!(15.0, average_value_of_bins(&data, &vec![0, 1]));
-    assert_eq!(20.0, average_value_of_bins(&data, &vec![0, 2]));
-    assert_eq!(20.0, average_value_of_bins(&data, &vec![0, 1, 2]));
-}
+    #[test]
+    fn test_average_is_calculated_from_correct_bin_indices() {
+        let data = vec![10.0, 20.0, 30.0];
 
-#[test]
-fn test_getting_bin_neighbours_only_includes_bins_within_the_system() {
-    let sieve = vec![(-1, -1), (0, 0), (1, 1)];
-    let shape = [2, 2];
+        assert_eq!(0.0, average_value_of_bins(&data, &vec![]));
+        assert_eq!(10.0, average_value_of_bins(&data, &vec![0]));
+        assert_eq!(15.0, average_value_of_bins(&data, &vec![0, 1]));
+        assert_eq!(20.0, average_value_of_bins(&data, &vec![0, 2]));
+        assert_eq!(20.0, average_value_of_bins(&data, &vec![0, 1, 2]));
+    }
 
-    assert_eq!(vec![0, 3], get_bin_neighbours(0, shape, &sieve));
-    assert_eq!(vec![1], get_bin_neighbours(1, shape, &sieve));
-    assert_eq!(vec![2], get_bin_neighbours(2, shape, &sieve));
-    assert_eq!(vec![0, 3], get_bin_neighbours(3, shape, &sieve));
-}
+    #[test]
+    fn test_getting_bin_neighbours_only_includes_bins_within_the_system() {
+        let sieve = vec![(-1, -1), (0, 0), (1, 1)];
+        let shape = [2, 2];
 
-#[test]
-fn test_bin_sizes_of_1_with_radius_1_returns_itself_and_four_neighbours() {
-    let bin_size = [1.0, 1.0, 0.0];
-    let radius = 1.0;
+        assert_eq!(vec![0, 3], get_bin_neighbours(0, shape, &sieve));
+        assert_eq!(vec![1], get_bin_neighbours(1, shape, &sieve));
+        assert_eq!(vec![2], get_bin_neighbours(2, shape, &sieve));
+        assert_eq!(vec![0, 3], get_bin_neighbours(3, shape, &sieve));
+    }
 
-    let bins = get_averaging_bin_sieve(radius, bin_size);
+    #[test]
+    fn test_bin_sizes_of_1_with_radius_1_returns_itself_and_four_neighbours() {
+        let bin_size = [1.0, 1.0, 0.0];
+        let radius = 1.0;
 
-    assert_eq!(5, bins.len());
-    assert!(bins.contains(&(0, 0)));
-    assert!(bins.contains(&(-1, 0)));
-    assert!(bins.contains(&(1, 0)));
-    assert!(bins.contains(&(0, -1)));
-    assert!(bins.contains(&(0, 1)));
-}
+        let bins = get_averaging_bin_sieve(radius, bin_size);
 
-#[test]
-fn test_bin_sizes_of_half_with_larger_radius_returns_itself_and_eight_neighbours() {
-    let bin_size = [0.5, 0.5, 0.0];
-    let radius = 0.75;
+        assert_eq!(5, bins.len());
+        assert!(bins.contains(&(0, 0)));
+        assert!(bins.contains(&(-1, 0)));
+        assert!(bins.contains(&(1, 0)));
+        assert!(bins.contains(&(0, -1)));
+        assert!(bins.contains(&(0, 1)));
+    }
 
-    let bins = get_averaging_bin_sieve(radius, bin_size);
+    #[test]
+    fn test_bin_sizes_of_half_with_larger_radius_returns_itself_and_eight_neighbours() {
+        let bin_size = [0.5, 0.5, 0.0];
+        let radius = 0.75;
 
-    assert_eq!(9, bins.len());
-    assert!(bins.contains(&(-1, -1)));
-    assert!(bins.contains(&(-1, 1)));
-    assert!(bins.contains(&(1, -1)));
-    assert!(bins.contains(&(1, 1)));
+        let bins = get_averaging_bin_sieve(radius, bin_size);
+
+        assert_eq!(9, bins.len());
+        assert!(bins.contains(&(-1, -1)));
+        assert!(bins.contains(&(-1, 1)));
+        assert!(bins.contains(&(1, -1)));
+        assert!(bins.contains(&(1, 1)));
+    }
 }

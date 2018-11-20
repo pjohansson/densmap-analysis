@@ -1,10 +1,3 @@
-#![feature(impl_trait_in_bindings)]
-
-mod analysis;
-mod average;
-mod densmap;
-mod graphdata;
-
 use pbr::ProgressBar;
 use regex::Regex;
 use structopt::StructOpt;
@@ -18,7 +11,7 @@ use std::{
     process::exit,
 };
 
-use self::{
+use densmap::{
     analysis::{
         autocorrelation::calc_autocorrelation,
         radial_density::{get_radial_density_distribution, get_radius_from_distribution},
